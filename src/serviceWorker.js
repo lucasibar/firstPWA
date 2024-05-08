@@ -1,76 +1,51 @@
 /* eslint-disable no-restricted-globals */
 
-// serviceWorker.js
+import {clientsClaim} from "workbox-core"
+import { ExpirationPlugin } from "workbox-expiration"
+import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching"
+import { registerRoute } from "workbox-routing"
+import { StaleWhileRevalidate } from "workbox-strategies"
 
-const CACHE_NAME = 'my-react-app-cache'; // Nombre del caché
-const urlsToCache = [
-  '/', // Cachea la página principal
-  '/index.html', // También puede cachear otros archivos estáticos como CSS, JS, etc.
-];
 
-self.addEventListener('install', event => {
-  // Perform install steps
-  console.log("hasta aca llegue sin problema")
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+clientsClaim()
+
+
+precacheAndRoute(self.__WB_MANIFEST)
+
+const fileExtensionRegexp = new RegExp("/[^/?]+\\.[^/]+$");
+registerRoute(
+  // Return false to exempt requests from being fulfilled by index.html.
+  ({ request, url }) => {
+    // If this isn't a navigation, skip.
+    if (request.mode !== "navigate") {
+      return false;
+    } // If this is a URL that starts with /\_, skip.
+    if (url.pathname.startsWith("/_")) {
+      return false;
+    } // If this looks like a URL for a resource, because it contains // a file extension, skip.
+    if (url.pathname.match(fileExtensionRegexp)) {
+      return false;
+    } // Return true to signal that we want to use the handler.
+    return true;
+  },
+  createHandlerBoundToURL(process.env.PUBLIC_URL + "/index.html")
+);
+
+registerRoute(
+    // Add in any other file extensions or routing criteria as needed.
+    ({ url }) =>
+      url.origin === self.location.origin && url.pathname.endsWith(".png"), // Customize this strategy as needed, e.g., by changing to CacheFirst.
+    new StaleWhileRevalidate({
+      cacheName: "images",
+      plugins: [
+        // Ensure that once this runtime cache reaches a maximum size the
+        // least-recently used images are removed.
+        new ExpirationPlugin({ maxEntries: 50 }),
+      ],
+    })
   );
-});
-
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
-  );
-});
-
-
-/* eslint-enable no-restricted-globals */
-
-
-
-
-
-
-
-
-// const isLocalhost = Boolean(
-//     window.location.hostname === 'localhost' ||
-//     window.location.hostname === '[::1]' ||
-//     window.location.hostname.match(
-//         /^127(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
-//     )
-// );
-
-// export function register(config){
-//     if(process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator){
-//         const publicUrl= new URL(process.env.PUBLIC_URL, window.location.href);
-//         if (publicUrl.origin !== window.location.origin){
-//             return
-//         }
-        
-//         window.addEventListener('load', ()=>{
-//             const swUrl= `${process.env.PUBLIC_URL}/service-worker.js`;
-
-//             if(isLocalhost){
-//                 checkValidServiceWorker(swUrl, config);
-
-//                 navigator.serviceWorker.ready.then(()=>{
-//                     console.log('esta aplicacion tiene servidor primero en la cache por un service-worker una pagina que puedo consultar si rompe todo es http://bit.ly/CRA-PWA')
-//                 })
-//             }else{
-//                 registerValidSW(swUrl, config)
-//             }
-//         })
-    
-//     }
-// }
+  self.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "SKIP_WAITING") {
+      self.skipWaiting();
+    }
+  });
